@@ -605,20 +605,22 @@ module.exports = class SpellCheckHandler {
     }
 
     result = (() => {
+      if (!this.currentSpellchecker) return false;
+
       if (contractionMap[text.toLocaleLowerCase()]) {
         return false;
       }
 
-      if (!this.currentSpellchecker) return false;
+      // Check dictionary of ignored words for this runtime first.
+      if (this.memoryDictionary.match(text)) {
+        return false;
+      }
 
       if (!this.isHunspell) {
         return this.currentSpellchecker.isMisspelled(text);
       }
 
-      // Check custom user dictionary for Hunspell first.
       if (this.userDictionary.match(text)) {
-        return false;
-      } else if (this.memoryDictionary.match(text)) {
         return false;
       }
 
