@@ -1,17 +1,26 @@
 # electron-spellchecker
 
-> Modified version of electron-spellchecker.
+> Modified version of electron-spellchecker that is used in Mark Text.
 
-electron-spellchecker is a library to help you implement spellchecking in your Electron applications, as well as handle default right-click Context Menus (since spell checking shows up in them).  This library intends to solve the problem of spellchecking in a production-ready, international-friendly way.
+electron-spellchecker is a library to help you implement spellchecking in your Electron applications. This library intends to solve the problem of spellchecking in a production-ready, international-friendly way.
 
 electron-spellchecker:
 
-* Spell checks in all of the languages that Google Chrome supports by reusing its dictionaries.
+* Spell checks in all of the languages that Chromium supports by reusing its dictionaries.
 * Automatically detects the language the user is typing in and silently switches on the fly.
 * Handles locale correctly and automatically (i.e. users who are from Australia should not be corrected for 'colour', but US English speakers should)
-* Automatically downloads and manages dictionaries in the background.
 * Checks very quickly, doesn't introduce input lag which is extremely noticable
 * Only loads one Dictionary at a time which saves a significant amount of memory
+* Passive mode: don't underline spelling mistakes but you are still able to test for spelling mistakes.
+* Custom user dictionary for both Hunspell and macOS.
+* Option to ignore a word at runtime only.
+* Attach spellchecker to a custom DOM element instead `document.body`.
+
+**Features removed:**
+
+- Dropped support for \<=Electron 4.
+- Removed context menus.
+- Dropped automatic dictionary download and management.
 
 ## Quick Start
 
