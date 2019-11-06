@@ -1,6 +1,2 @@
-// NB: On Windows we still use Hunspell
-if (process.platform === 'win32') {
-  process.env['SPELLCHECKER_PREFER_HUNSPELL'] = 1;
-}
-
+// We still use Hunspell on Linux and Windows before Windows 10.
 module.exports = require('@hfelix/spellchecker');

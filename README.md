@@ -7,6 +7,7 @@ electron-spellchecker is a library to help you implement spellchecking in your E
 electron-spellchecker:
 
 * Spell checks in all of the languages that Chromium supports by reusing its dictionaries.
+* Support for native macOS and Windows 10 spell checker that are prefered by default.
 * Automatically detects the language the user is typing in and silently switches on the fly.
 * Handles locale correctly and automatically (i.e. users who are from Australia should not be corrected for 'colour', but US English speakers should)
 * Checks very quickly, doesn't introduce input lag which is extremely noticable

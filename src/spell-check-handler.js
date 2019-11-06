@@ -9,6 +9,7 @@ const UserDictionary = require('./user-dictionary');
 const {normalizeLanguageCode} = require('./utility');
 
 let Spellchecker;
+let SPELLCHECKER_HUNSPELL;
 
 let d = require('debug')('electron-spellchecker:spell-check-handler');
 
@@ -28,6 +29,7 @@ let webFrame = (process.type === 'renderer' ?
 const validLangCodeWindowsLinux = /[a-z]{2}[_][A-Z]{2}/;
 
 const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 const isWindows = process.platform === 'win32';
 
 // NB: This is to work around electron/electron#1005, where contractions
@@ -87,36 +89,55 @@ module.exports = class SpellCheckHandler {
    */
   constructor(cacheDir=null) {
     // NB: Require here so that consumers can handle native module exceptions.
-    Spellchecker = require('./node-spellchecker').Spellchecker;
+    const nodeSpellchecker = require('./node-spellchecker');
+    Spellchecker = nodeSpellchecker.Spellchecker;
+    SPELLCHECKER_HUNSPELL = nodeSpellchecker.SPELLCHECKER_HUNSPELL;
 
+    // Ensure Hunspell directory.
     cacheDir = cacheDir || path.join(app.getPath('userData'), 'dictionaries');
     ensureDir(cacheDir);
 
-    // TODO(spell): Ask spellchecker which spell checker is used and allow to change
-    // at runtime.
-    this.isHunspell = !isMac || !!process.env['SPELLCHECKER_PREFER_HUNSPELL'];
+    // Test once that `isHunspell` and the spellchecker type match.
+    this.runtimeSpellcheckTypeTest = false;
+    this.currentSpellchecker = null;
+    this.isEnabled = false;
+    this.isHunspell = isLinux || !!process.env['SPELLCHECKER_PREFER_HUNSPELL'];
+
+    // NOTE: Windows native spellchecker may fail or is not supported at runtime.
+    if (!this.isHunspell && isWindows) {
+      this.currentSpellchecker = new Spellchecker();
+      this.runtimeSpellcheckTypeTest = true;
+      if (this.currentSpellchecker.getSpellcheckerType() === SPELLCHECKER_HUNSPELL) {
+        // Windows native spellchecker is not supported.
+        this.currentSpellchecker = null;
+        this.isHunspell = true;
+      } else {
+        // Keep spellchecker enabled but don't set language to allow to query dictionaries.
+        this.isEnabled = true;
+        this.isHunspell = false;
+      }
+    }
+
     this.dictionarySync = new DictionarySync(this.isHunspell, cacheDir);
     this.userDictionary = new UserDictionary(cacheDir);
     // Dictionary of ignored words for the current runtime.
     this.memoryDictionary = new UserDictionary(cacheDir, true);
-    this.currentSpellchecker = null;
     this.currentSpellcheckerLanguage = null;
     this.isMisspelledCache = new LRU({ max: 5000 });
-    this.isEnabled = false;
     // Spell checker is deactivated due to an issue (e.g. dict not available).
     this.invalidState = false;
 
     this.bus = new EventEmitter();
     this._unsubscribeFn = null;
 
-    this._automaticallyIdentifyLanguages = !this.isHunspell;
+    this._automaticallyIdentifyLanguages = isMac;
     // Don't underline spelling mistakes.
     this._isPassiveMode = false;
 
     // Initialize in-memory dictionary.
     this.memoryDictionary.loadForLanguage();
 
-    if (!this.isHunspell) {
+    if (isMac && !this.isHunspell) {
       // NB: OS X does automatic language detection, we're gonna trust it
       this.currentSpellchecker = new Spellchecker();
       this.currentSpellcheckerLanguage = 'en-US';
@@ -150,14 +171,16 @@ module.exports = class SpellCheckHandler {
     this._automaticallyIdentifyLanguages = !!value;
     this.bus.emit('resetAutoDetection');
 
-    // Calling `setDictionary` on the macOS implementation of `@nornagon/spellchecker`
-    // is the only way to set the `automaticallyIdentifyLanguages` property on the
-    // native NSSpellchecker. Calling switchLanguage with a language will set it `false`,
-    // while calling it with an empty language will set it to `true`
-    if (!this.isHunspell && !!value) {
-      this.switchLanguage();
-    } else if (!this.isHunspell && !value && this.currentSpellcheckerLanguage) {
-      this.switchLanguage(this.currentSpellcheckerLanguage);
+    if (isMac && !this.isHunspell) {
+      // Calling `setDictionary` on the macOS implementation of `@nornagon/spellchecker`
+      // is the only way to set the `automaticallyIdentifyLanguages` property on the
+      // native NSSpellchecker. Calling switchLanguage with a language will set it `false`,
+      // while calling it with an empty language will set it to `true`
+      if (!!value) {
+        this.switchLanguage();
+      } else if (!value && this.currentSpellcheckerLanguage) {
+        this.switchLanguage(this.currentSpellcheckerLanguage);
+      }
     }
   }
 
@@ -231,7 +254,7 @@ module.exports = class SpellCheckHandler {
 
     this.memoryDictionary.loadForLanguage();
 
-    if (!this.isHunspell) {
+    if (isMac && !this.isHunspell) {
       // Using macOS native spell checker.
       this.currentSpellchecker = new Spellchecker();
       this.isEnabled = true;
@@ -252,9 +275,13 @@ module.exports = class SpellCheckHandler {
         return true;
       }
       // else: fallthrough and switch language
+    } else if (isWindows && !this.isHunspell) {
+      // Using Windows spell checker
+      this.currentSpellchecker = new Spellchecker();
+      this.isEnabled = true;
     }
 
-    // Using Hunspell
+    // Using Hunspell or fallback.
 
     this.currentSpellcheckerLanguage = lang;
     this.automaticallyIdentifyLanguages = automaticallyIdentifyLanguages;
@@ -299,8 +326,9 @@ module.exports = class SpellCheckHandler {
    *                                  Hunspell. Default `document.body`.
    */
   attachToInput(container=null) {
-    // OS X has no need for any of this except for passive mode.
-    if (!this.isHunspell && !this.isPassiveMode) {
+    // macOS has no need for any of this except for passive mode because
+    // the spellchecker does automatic language detection.
+    if (isMac && !this.isHunspell && !this.isPassiveMode) {
       return;
     }
 
@@ -427,9 +455,12 @@ module.exports = class SpellCheckHandler {
    * @return {Promise<boolean>}   Completion
    */
   async provideHintText(inputText) {
-    let langWithoutLocale = null;
-    if (!this.isHunspell) return false;
+    // Use macOS automatic language detection.
+    if (isMac && !this.isHunspell && !this.isPassiveMode) {
+      return false;
+    }
 
+    let langWithoutLocale = null;
     try {
       langWithoutLocale = await this.detectLanguageForText(inputText.substring(0, 512));
     } catch (e) {
@@ -457,7 +488,15 @@ module.exports = class SpellCheckHandler {
 
     this.isMisspelledCache.reset();
 
-    // Set language on macOS (OS spell checker)
+    if (!this.runtimeSpellcheckTypeTest && this.currentSpellchecker) {
+      if (this.currentSpellchecker.getSpellcheckerType() === SPELLCHECKER_HUNSPELL && !this.isHunspell) {
+        this.disableSpellchecker()
+        throw new Error('Invalid spellchecker state: Type mismatch.')
+      }
+      this.runtimeSpellcheckTypeTest = true
+    }
+
+    // Set language on OS spell checker.
     if (!this.isHunspell) {
       if (!this.currentSpellchecker) {
         d('Spellchecker is not initialized');
@@ -468,12 +507,16 @@ module.exports = class SpellCheckHandler {
 
       d(`Setting current spellchecker to ${langCode}`);
 
-      // An empty language code enables the automatic language detection.
-      if (!langCode) {
-        this._automaticallyIdentifyLanguages = true;
-        this.currentSpellcheckerLanguage = this.currentSpellcheckerLanguage || 'en-US';
+      if (isMac) {
+        // An empty language code enables the automatic language detection on macOS.
+        if (!langCode) {
+          this._automaticallyIdentifyLanguages = true;
+          this.currentSpellcheckerLanguage = this.currentSpellcheckerLanguage || 'en-US';
+        } else {
+          this._automaticallyIdentifyLanguages = false;
+          this.currentSpellcheckerLanguage = langCode;
+        }
       } else {
-        this._automaticallyIdentifyLanguages = false;
         this.currentSpellcheckerLanguage = langCode;
       }
 
@@ -571,23 +614,33 @@ module.exports = class SpellCheckHandler {
    *  @private
    */
   handleElectronSpellCheck(words, callback) {
-    if (!this.currentSpellchecker || this.isPassiveMode) {
+    if (!this.currentSpellchecker) {
+      callback([]);
+      return;
+    } else if (this.isPassiveMode) {
+      if (this.isHunspell) {
+        this.bus.emit('spellCheckInvoked');
+      }
+      if (this.automaticallyIdentifyLanguages) {
+        // Try to detect the typed language.
+        this.bus.emit('spellingErrorOccurred');
+      }
+
       callback([]);
       return;
     }
 
     let misspelled = words.filter(w => w.length > 1 && this.isMisspelled(w));
 
-    if (!this.isHunspell) {
+    if (isMac && !this.isHunspell) {
       callback(misspelled);
       return;
     }
 
-    this.bus.emit('spellCheckInvoked', true);
+    this.bus.emit('spellCheckInvoked');
     if (this.automaticallyIdentifyLanguages) {
-      // Event is only used to reset the typed words counter.
+      // Try to detect the typed language.
       this.bus.emit('spellingErrorOccurred');
-      // misspelled.forEach(w => this.bus.emit('spellingErrorOccurred', w));
     }
     callback(misspelled);
   }
@@ -605,7 +658,9 @@ module.exports = class SpellCheckHandler {
     }
 
     result = (() => {
-      if (!this.currentSpellchecker) return false;
+      if (!this.currentSpellchecker) {
+        return false;
+      }
 
       if (contractionMap[text.toLocaleLowerCase()]) {
         return false;
@@ -694,7 +749,7 @@ module.exports = class SpellCheckHandler {
 
     this.isMisspelledCache.del(word);
 
-    // Handle NSSpellChecker
+    // Handle OS spellchecker.
     if (!this.isHunspell) {
       this.currentSpellchecker.add(word);
       return;
@@ -714,7 +769,7 @@ module.exports = class SpellCheckHandler {
 
     this.isMisspelledCache.del(word);
 
-    // Handle NSSpellChecker
+    // Handle OS spellchecker.
     if (!this.isHunspell) {
       this.currentSpellchecker.remove(word);
       return;
