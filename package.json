@@ -1,6 +1,6 @@
 {
   "name": "@hfelix/electron-spellchecker",
-  "version": "1.0.0-rc.4",
+  "version": "1.0.0-rc.5",
   "description": "Implement spellchecking, correctly",
   "scripts": {
     "doc": "esdoc -c ./esdoc.json"
@@ -24,7 +24,7 @@
   "main": "src/index.js",
   "homepage": "https://github.com/fxha/electron-spellchecker",
   "dependencies": {
-    "@hfelix/spellchecker": "^4.0.12-rc.0",
+    "@hfelix/spellchecker": "^4.0.12-rc.2",
     "bcp47": "^1.1.2",
     "cld": "^2.5.1",
     "debug": "^4.1.1",
