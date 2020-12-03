@@ -28,7 +28,9 @@ electron-spellchecker:
 ```js
 import {SpellCheckHandler} from 'electron-spellchecker';
 
-window.spellCheckHandler = new SpellCheckHandler();
+const cacheDir = '';
+
+window.spellCheckHandler = new SpellCheckHandler(cacheDir);
 window.spellCheckHandler.attachToInput();
 
 // Start off as US English, America #1 (lol)
@@ -43,9 +45,4 @@ Sample text should be text that is reasonably likely to be in the same language 
 
 ## About node-spellchecker
 
-This module uses a fork of Atom's excellent `node-spellchecker` that takes a slightly different path on Windows by using Hunspell only. You can find the source [here](https://github.com/felixrieseberg/node-spellchecker).
-
-## Learning more
-
-* Run `npm start` to start [the example application](https://github.com/electron-userland/electron-spellchecker/tree/master/example) and play around.
-* Read [the class documentation](https://electron-userland.github.io/electron-spellchecker/docs/) to learn more.
+This module uses a fork of Atom's excellent `node-spellchecker` with few modifications. You can find the source [here](https://github.com/fxha/node-spellchecker).

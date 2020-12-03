@@ -1,5 +1,13 @@
 {
-    "parser": "babel-eslint",
+    "root": true,
+    "parserOptions": {
+        "parser": "babel-eslint",
+        "ecmaVersion": 8,
+        "ecmaFeatures": {
+          "impliedStrict": true
+        },
+        "sourceType": "module"
+    },
     "rules": {
         "strict": 0,
         "indent": [
@@ -10,7 +18,9 @@
             2,
             "always"
         ],
-        "no-console": 0
+        "no-console": 0,
+        "no-useless-escape": 0,
+        "no-prototype-builtins": 0
     },
     "env": {
         "es6": true,

@@ -1,4 +1,3 @@
-const path = require('path');
 const fs = require('fs-extra');
 const EventEmitter = require('events');
 const LRU = require('lru-cache');
@@ -14,12 +13,9 @@ let SPELLCHECKER_HUNSPELL;
 let d = require('debug')('electron-spellchecker:spell-check-handler');
 
 // TODO(spell): Asynchronously check language via Web Workers?
-const cld = require('./cld2'); // requireTaskPool(require.resolve('./cld2'));
+const cld = require('./cld2');
 
 let fallbackLocaleTable = null;
-const app = process.type === 'renderer' ?
-  require('electron').remote.app :
-  require('electron').app;
 let webFrame = (process.type === 'renderer' ?
   require('electron').webFrame :
   null);
@@ -83,18 +79,20 @@ module.exports = class SpellCheckHandler {
   /**
    * Constructs a SpellCheckHandler
    *
-   * @param  {String}  cacheDir    The path to a directory to store dictionaries.
-   *                               If not given, the Electron user data directory
-   *                               will be used.
+   * @param {String} cacheDir  The path to a directory to store Hunspell dictionaries.
+   *                           If not given, an exception is thrown.
    */
-  constructor(cacheDir=null) {
+  constructor(cacheDir) {
+    if (!cacheDir) {
+      throw new Error('Expected a cache directory for Hunspell.');
+    }
+
     // NB: Require here so that consumers can handle native module exceptions.
     const nodeSpellchecker = require('./node-spellchecker');
     Spellchecker = nodeSpellchecker.Spellchecker;
     SPELLCHECKER_HUNSPELL = nodeSpellchecker.SPELLCHECKER_HUNSPELL;
 
     // Ensure Hunspell directory.
-    cacheDir = cacheDir || path.join(app.getPath('userData'), 'dictionaries');
     ensureDir(cacheDir);
 
     // Test once that `isHunspell` and the spellchecker type match.
@@ -176,7 +174,7 @@ module.exports = class SpellCheckHandler {
       // is the only way to set the `automaticallyIdentifyLanguages` property on the
       // native NSSpellchecker. Calling switchLanguage with a language will set it `false`,
       // while calling it with an empty language will set it to `true`
-      if (!!value) {
+      if (value) {
         this.switchLanguage();
       } else if (!value && this.currentSpellcheckerLanguage) {
         this.switchLanguage(this.currentSpellcheckerLanguage);
@@ -490,10 +488,10 @@ module.exports = class SpellCheckHandler {
 
     if (!this.runtimeSpellcheckTypeTest && this.currentSpellchecker) {
       if (this.currentSpellchecker.getSpellcheckerType() === SPELLCHECKER_HUNSPELL && !this.isHunspell) {
-        this.disableSpellchecker()
-        throw new Error('Invalid spellchecker state: Type mismatch.')
+        this.disableSpellchecker();
+        throw new Error('Invalid spellchecker state: Type mismatch.');
       }
-      this.runtimeSpellcheckTypeTest = true
+      this.runtimeSpellcheckTypeTest = true;
     }
 
     // Set language on OS spell checker.
@@ -566,7 +564,7 @@ module.exports = class SpellCheckHandler {
    */
   async loadDictionaryForLanguageWithAlternatives(langCode) {
     if (!langCode) {
-      throw new Error('loadDictionaryForLanguageWithAlternatives: Invalid language code.')
+      throw new Error('loadDictionaryForLanguageWithAlternatives: Invalid language code.');
     }
 
     this.fallbackLocaleTable = this.fallbackLocaleTable || require('./fallback-locales');
@@ -838,7 +836,8 @@ module.exports = class SpellCheckHandler {
             d(`Error normalize language code: ${error}`);
             return null;
           }
-        }));
+        }))
+        .filter(x => { return !!x; });
     }
 
     d(`Filtered Locale list: ${JSON.stringify(localeList)}`);
